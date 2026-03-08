@@ -608,7 +608,7 @@ struct StreamingBubble: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            AssistantAvatar()
+            NaviOrb(size: 26, isActive: true)
                 .padding(.top, 2)
 
             VStack(alignment: .leading, spacing: 6) {
@@ -642,13 +642,20 @@ struct StreamingBubble: View {
                             .equatable()
                             .textSelection(.enabled)
 
-                        // Blinking cursor
+                        // Blinking cursor with glow
                         HStack(spacing: 0) {
                             Spacer().frame(width: 0)
-                            RoundedRectangle(cornerRadius: 1)
-                                .fill(Color.accentNavi.opacity(0.8))
-                                .frame(width: 2, height: 16)
-                                .opacity(cursorVisible ? 1 : 0)
+                            RoundedRectangle(cornerRadius: 1.5)
+                                .fill(
+                                    LinearGradient(
+                                        colors: [.naviCyan, .naviViolet],
+                                        startPoint: .top,
+                                        endPoint: .bottom
+                                    )
+                                )
+                                .frame(width: 2.5, height: 18)
+                                .opacity(cursorVisible ? 1 : 0.2)
+                                .shadow(color: .naviCyan.opacity(0.6), radius: cursorVisible ? 4 : 0)
                         }
                         .frame(height: 4)
                     }
@@ -730,12 +737,20 @@ struct ActivityStatusBar: View {
             }
         }
         .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(Color.accentNavi.opacity(0.04))
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color.naviCyan.opacity(0.04))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .strokeBorder(Color.accentNavi.opacity(0.1), lineWidth: 0.5)
+                    RoundedRectangle(cornerRadius: 10)
+                        .strokeBorder(
+                            LinearGradient(
+                                colors: [Color.naviCyan.opacity(0.15), Color.naviViolet.opacity(0.08)],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            ),
+                            lineWidth: 0.6
+                        )
                 )
+                .shadow(color: Color.naviCyan.opacity(0.05), radius: 6, y: 2)
         )
     }
 }

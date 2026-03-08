@@ -244,27 +244,32 @@ extension Color {
 // MARK: - Animated Mesh Background
 
 struct AnimatedMeshBackground: View {
-    @State private var phase: CGFloat = 0
+    var intensity: Double = 1.0
 
     var body: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { timeline in
             Canvas { context, size in
-                let t = timeline.date.timeIntervalSinceReferenceDate * 0.3
+                let t = timeline.date.timeIntervalSinceReferenceDate * 0.25
                 let w = size.width
                 let h = size.height
 
-                // Draw soft gradient orbs that drift
-                let orbs: [(Color, CGFloat, CGFloat, CGFloat)] = [
-                    (.naviViolet.opacity(0.12), 0.3, 0.4, 180),
-                    (.naviCyan.opacity(0.08), 0.7, 0.3, 220),
-                    (.naviMagenta.opacity(0.06), 0.5, 0.7, 260),
-                    (.naviMint.opacity(0.05), 0.2, 0.8, 140),
+                // Rich set of drifting gradient orbs
+                let orbs: [(Color, CGFloat, CGFloat, CGFloat, CGFloat, CGFloat)] = [
+                    // (color, baseX, baseY, radius, speedX, speedY)
+                    (.naviViolet.opacity(0.14 * intensity),   0.25, 0.35, 200, 0.6, 0.4),
+                    (.naviCyan.opacity(0.10 * intensity),     0.75, 0.25, 240, 0.8, 0.3),
+                    (.naviMagenta.opacity(0.08 * intensity),  0.50, 0.65, 280, 0.5, 0.7),
+                    (.naviMint.opacity(0.06 * intensity),     0.15, 0.80, 160, 0.9, 0.5),
+                    (.naviAmber.opacity(0.05 * intensity),    0.85, 0.70, 180, 0.4, 0.8),
+                    (.naviViolet.opacity(0.04 * intensity),   0.60, 0.10, 140, 0.7, 0.6),
+                    (.naviCyan.opacity(0.06 * intensity),     0.40, 0.90, 200, 0.3, 0.9),
                 ]
 
-                for (color, baseX, baseY, radius) in orbs {
-                    let x = w * baseX + sin(t * 0.7 + Double(baseX * 10)) * w * 0.08
-                    let y = h * baseY + cos(t * 0.5 + Double(baseY * 10)) * h * 0.06
-                    let r = radius + sin(t * 0.3) * 20
+                for (color, baseX, baseY, radius, sX, sY) in orbs {
+                    let x = w * baseX + sin(t * sX + Double(baseX * 12)) * w * 0.12
+                    let y = h * baseY + cos(t * sY + Double(baseY * 12)) * h * 0.10
+                    let breathe = sin(t * 0.4 + Double(baseX + baseY) * 5) * 30
+                    let r = radius + breathe
 
                     let rect = CGRect(x: x - r, y: y - r, width: r * 2, height: r * 2)
                     let gradient = Gradient(colors: [color, color.opacity(0)])
@@ -289,21 +294,37 @@ struct NaviOrb: View {
     var size: CGFloat = 40
     var isActive: Bool = false
     @State private var rotation: Double = 0
+    @State private var pulseScale: CGFloat = 1.0
 
     var body: some View {
         ZStack {
-            // Outer glow
+            // Pulsing ring (active state)
             if isActive {
+                Circle()
+                    .strokeBorder(
+                        AngularGradient(
+                            colors: [.naviCyan.opacity(0.4), .naviViolet.opacity(0.2), .naviMagenta.opacity(0.3), .naviCyan.opacity(0.4)],
+                            center: .center,
+                            startAngle: .degrees(rotation * 0.5),
+                            endAngle: .degrees(rotation * 0.5 + 360)
+                        ),
+                        lineWidth: 1.5
+                    )
+                    .frame(width: size * 1.5, height: size * 1.5)
+                    .scaleEffect(pulseScale)
+                    .opacity(2.0 - Double(pulseScale))
+
+                // Outer glow
                 Circle()
                     .fill(
                         RadialGradient(
-                            colors: [Color.naviCyan.opacity(0.3), Color.clear],
+                            colors: [Color.naviCyan.opacity(0.25), Color.naviViolet.opacity(0.08), Color.clear],
                             center: .center,
-                            startRadius: size * 0.3,
-                            endRadius: size * 0.9
+                            startRadius: size * 0.2,
+                            endRadius: size * 1.0
                         )
                     )
-                    .frame(width: size * 1.6, height: size * 1.6)
+                    .frame(width: size * 2.0, height: size * 2.0)
             }
 
             // Gradient orb
@@ -323,7 +344,7 @@ struct NaviOrb: View {
             Circle()
                 .fill(
                     RadialGradient(
-                        colors: [Color.white.opacity(0.3), Color.clear],
+                        colors: [Color.white.opacity(0.35), Color.clear],
                         center: .init(x: 0.35, y: 0.3),
                         startRadius: 0,
                         endRadius: size * 0.4
@@ -335,20 +356,22 @@ struct NaviOrb: View {
             Image(systemName: "sparkles")
                 .font(.system(size: size * 0.4, weight: .semibold))
                 .foregroundColor(.white)
+                .shadow(color: .white.opacity(0.5), radius: 2)
         }
         .onAppear {
-            if isActive {
-                withAnimation(.linear(duration: 8).repeatForever(autoreverses: false)) {
-                    rotation = 360
-                }
-            }
+            if isActive { startAnimations() }
         }
         .onChange(of: isActive) { _, active in
-            if active {
-                withAnimation(.linear(duration: 8).repeatForever(autoreverses: false)) {
-                    rotation = 360
-                }
-            }
+            if active { startAnimations() }
+        }
+    }
+
+    private func startAnimations() {
+        withAnimation(.linear(duration: 6).repeatForever(autoreverses: false)) {
+            rotation = 360
+        }
+        withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
+            pulseScale = 1.3
         }
     }
 }

@@ -101,61 +101,95 @@ struct FloatingPanelContainer<Content: View>: View {
 
     @State private var dragOffset: CGFloat = 0
     @State private var appeared = false
+    @State private var glowPhase: CGFloat = 0
 
     var body: some View {
         if isPresented {
             GeometryReader { geo in
                 VStack(spacing: 0) {
-                    Spacer(minLength: 60)
+                    Spacer(minLength: 50)
 
                     VStack(spacing: 0) {
                         // Drag handle + header
                         panelHeader
 
-                        Divider()
-                            .overlay(
-                                LinearGradient(
-                                    colors: [panelType.accentColor.opacity(0.6), panelType.accentColor.opacity(0.0)],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
+                        // Accent gradient divider with shimmer
+                        ZStack {
+                            Rectangle()
+                                .fill(
+                                    LinearGradient(
+                                        colors: [
+                                            panelType.accentColor.opacity(0.0),
+                                            panelType.accentColor.opacity(0.7),
+                                            panelType.accentColor.opacity(0.9),
+                                            panelType.accentColor.opacity(0.7),
+                                            panelType.accentColor.opacity(0.0)
+                                        ],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
                                 )
-                            )
-                            .frame(height: 0.5)
+                                .frame(height: 1)
+
+                            // Shimmer highlight
+                            Rectangle()
+                                .fill(
+                                    LinearGradient(
+                                        stops: [
+                                            .init(color: .clear, location: max(0, glowPhase - 0.15)),
+                                            .init(color: .white.opacity(0.6), location: glowPhase),
+                                            .init(color: .clear, location: min(1, glowPhase + 0.15))
+                                        ],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                                .frame(height: 1)
+                        }
 
                         // Panel content
                         content()
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
-                    .frame(maxHeight: geo.size.height * 0.7)
+                    .frame(maxHeight: geo.size.height * 0.75)
                     .background(
-                        RoundedRectangle(cornerRadius: 24)
-                            .fill(.ultraThinMaterial)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 24)
-                                    .strokeBorder(
-                                        LinearGradient(
-                                            colors: [
-                                                panelType.accentColor.opacity(0.3),
-                                                Color.glassBorder.opacity(0.2),
-                                                panelType.accentColor.opacity(0.1)
-                                            ],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        ),
-                                        lineWidth: 0.8
-                                    )
-                            )
-                            .shadow(color: panelType.accentColor.opacity(0.15), radius: 30, y: -5)
-                            .shadow(color: .black.opacity(0.5), radius: 20, y: 10)
+                        ZStack {
+                            // Deep glass
+                            RoundedRectangle(cornerRadius: 24)
+                                .fill(.ultraThinMaterial)
+
+                            // Subtle accent tint
+                            RoundedRectangle(cornerRadius: 24)
+                                .fill(panelType.accentColor.opacity(0.03))
+
+                            // Vivid border
+                            RoundedRectangle(cornerRadius: 24)
+                                .strokeBorder(
+                                    LinearGradient(
+                                        colors: [
+                                            panelType.accentColor.opacity(0.5),
+                                            Color.glassBorder.opacity(0.15),
+                                            panelType.accentColor.opacity(0.2),
+                                            Color.glassBorder.opacity(0.1)
+                                        ],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    ),
+                                    lineWidth: 0.8
+                                )
+                        }
+                        .shadow(color: panelType.accentColor.opacity(0.2), radius: 40, y: -5)
+                        .shadow(color: .black.opacity(0.6), radius: 25, y: 12)
                     )
                     .clipShape(RoundedRectangle(cornerRadius: 24))
+                    .scaleEffect(appeared ? 1.0 : 0.92)
                     .offset(y: dragOffset)
-                    .offset(y: appeared ? 0 : geo.size.height * 0.5)
+                    .offset(y: appeared ? 0 : geo.size.height * 0.4)
                     .gesture(
                         DragGesture()
                             .onChanged { value in
                                 if value.translation.height > 0 {
-                                    dragOffset = value.translation.height * 0.5
+                                    dragOffset = value.translation.height * 0.4
                                 }
                             }
                             .onEnded { value in
@@ -168,39 +202,56 @@ struct FloatingPanelContainer<Content: View>: View {
                             }
                     )
                 }
-                .padding(.horizontal, geo.size.width > 700 ? geo.size.width * 0.15 : 8)
-                .padding(.bottom, 8)
+                .padding(.horizontal, geo.size.width > 700 ? geo.size.width * 0.12 : 6)
+                .padding(.bottom, 6)
             }
             .transition(.asymmetric(
-                insertion: .opacity.combined(with: .move(edge: .bottom)),
-                removal: .opacity.combined(with: .move(edge: .bottom))
+                insertion: .opacity.combined(with: .scale(scale: 0.95)).combined(with: .move(edge: .bottom)),
+                removal: .opacity.combined(with: .scale(scale: 0.97)).combined(with: .move(edge: .bottom))
             ))
             .onAppear {
-                withAnimation(.spring(response: 0.5, dampingFraction: 0.82)) {
+                withAnimation(.spring(response: 0.45, dampingFraction: 0.78)) {
                     appeared = true
                 }
+                // Shimmer on entry
+                withAnimation(.easeInOut(duration: 0.8).delay(0.2)) {
+                    glowPhase = 1.0
+                }
             }
-            .onDisappear { appeared = false }
+            .onDisappear {
+                appeared = false
+                glowPhase = 0
+            }
         }
     }
 
     private var panelHeader: some View {
         VStack(spacing: 8) {
-            // Drag indicator
+            // Drag indicator with glow
             RoundedRectangle(cornerRadius: 3)
-                .fill(Color.white.opacity(0.25))
-                .frame(width: 36, height: 4)
+                .fill(
+                    LinearGradient(
+                        colors: [panelType.accentColor.opacity(0.3), .white.opacity(0.3), panelType.accentColor.opacity(0.3)],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .frame(width: 40, height: 4)
                 .padding(.top, 10)
 
             HStack(spacing: 10) {
-                // Icon with accent glow
+                // Icon with accent glow ring
                 ZStack {
                     Circle()
-                        .fill(panelType.accentColor.opacity(0.15))
-                        .frame(width: 32, height: 32)
+                        .fill(panelType.accentColor.opacity(0.12))
+                        .frame(width: 34, height: 34)
+                    Circle()
+                        .strokeBorder(panelType.accentColor.opacity(0.25), lineWidth: 0.8)
+                        .frame(width: 34, height: 34)
                     Image(systemName: panelType.icon)
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(panelType.accentColor)
+                        .shadow(color: panelType.accentColor.opacity(0.5), radius: 4)
                 }
 
                 Text(panelType.label)
@@ -214,7 +265,11 @@ struct FloatingPanelContainer<Content: View>: View {
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(.secondary)
                         .frame(width: 28, height: 28)
-                        .background(Circle().fill(Color.white.opacity(0.08)))
+                        .background(
+                            Circle()
+                                .fill(Color.white.opacity(0.06))
+                                .overlay(Circle().strokeBorder(Color.white.opacity(0.1), lineWidth: 0.5))
+                        )
                 }
                 .buttonStyle(.plain)
             }
@@ -236,56 +291,87 @@ struct QuickActionDock: View {
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
+            HStack(spacing: 4) {
                 ForEach(dockItems) { item in
                     dockButton(item)
                 }
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, 14)
             .padding(.vertical, 6)
         }
         .background(
-            RoundedRectangle(cornerRadius: 20)
-                .fill(.ultraThinMaterial)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 20)
-                        .strokeBorder(Color.glassBorder, lineWidth: 0.5)
-                )
-                .shadow(color: .black.opacity(0.3), radius: 10, y: 4)
+            ZStack {
+                RoundedRectangle(cornerRadius: 22)
+                    .fill(.ultraThinMaterial)
+                RoundedRectangle(cornerRadius: 22)
+                    .fill(Color.masterBackground.opacity(0.3))
+                RoundedRectangle(cornerRadius: 22)
+                    .strokeBorder(
+                        LinearGradient(
+                            colors: [Color.glassBorder.opacity(0.3), Color.naviCyan.opacity(0.1), Color.glassBorder.opacity(0.2)],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        ),
+                        lineWidth: 0.5
+                    )
+            }
+            .shadow(color: .black.opacity(0.4), radius: 12, y: 5)
         )
-        .padding(.horizontal, 16)
+        .padding(.horizontal, 12)
     }
 
     private func dockButton(_ item: FloatingPanelType) -> some View {
         let isActive = panelManager.activePanel == item
         let hasActivity = item == .agents && !agentRunner.agents.filter({ $0.status.isActive }).isEmpty
 
-        return Button { panelManager.show(item) } label: {
-            VStack(spacing: 4) {
+        return Button {
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+                panelManager.show(item)
+            }
+        } label: {
+            VStack(spacing: 3) {
                 ZStack(alignment: .topTrailing) {
-                    Image(systemName: item.icon)
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundColor(isActive ? item.accentColor : .secondary)
-                        .frame(width: 36, height: 28)
+                    ZStack {
+                        // Glow behind icon when active
+                        if isActive {
+                            Circle()
+                                .fill(item.accentColor.opacity(0.2))
+                                .frame(width: 30, height: 22)
+                                .blur(radius: 6)
+                        }
+
+                        Image(systemName: item.icon)
+                            .font(.system(size: 14, weight: isActive ? .bold : .medium))
+                            .foregroundColor(isActive ? item.accentColor : .secondary.opacity(0.8))
+                            .shadow(color: isActive ? item.accentColor.opacity(0.6) : .clear, radius: 4)
+                    }
+                    .frame(width: 34, height: 26)
 
                     if hasActivity {
                         Circle()
                             .fill(Color.green)
                             .frame(width: 7, height: 7)
+                            .shadow(color: .green.opacity(0.6), radius: 3)
                             .offset(x: 2, y: -2)
                     }
                 }
 
                 Text(item.label)
-                    .font(.system(size: 9, weight: .medium))
-                    .foregroundColor(isActive ? item.accentColor : .secondary.opacity(0.7))
+                    .font(.system(size: 9, weight: isActive ? .bold : .medium))
+                    .foregroundColor(isActive ? item.accentColor : .secondary.opacity(0.6))
             }
-            .padding(.horizontal, 4)
-            .padding(.vertical, 4)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 5)
             .background(
                 RoundedRectangle(cornerRadius: 10)
-                    .fill(isActive ? item.accentColor.opacity(0.12) : Color.clear)
+                    .fill(isActive ? item.accentColor.opacity(0.1) : Color.clear)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .strokeBorder(isActive ? item.accentColor.opacity(0.2) : Color.clear, lineWidth: 0.5)
+                    )
             )
+            .scaleEffect(isActive ? 1.08 : 1.0)
+            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isActive)
         }
         .buttonStyle(.plain)
     }

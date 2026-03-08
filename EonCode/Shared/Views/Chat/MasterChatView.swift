@@ -41,12 +41,17 @@ struct MasterChatView: View {
             // Layer 3: Floating panels
             floatingPanelOverlay
 
-            // Layer 4: Dim overlay when panel is shown
+            // Layer 4: Dim overlay with blur when panel is shown
             if panelManager.activePanel != nil {
-                Color.black.opacity(0.35)
+                Color.black.opacity(0.4)
                     .ignoresSafeArea()
-                    .onTapGesture { panelManager.dismiss() }
-                    .transition(.opacity)
+                    .background(.ultraThinMaterial.opacity(0.3))
+                    .onTapGesture {
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                            panelManager.dismiss()
+                        }
+                    }
+                    .transition(.opacity.animation(.easeOut(duration: 0.25)))
                     .zIndex(50)
             }
 
@@ -169,7 +174,20 @@ struct MasterChatView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-        .background(Color.masterBackground.opacity(0.7))
+        .background(
+            ZStack(alignment: .bottom) {
+                Color.masterBackground.opacity(0.75)
+                    .background(.ultraThinMaterial.opacity(0.5))
+
+                // Subtle gradient edge
+                LinearGradient(
+                    colors: [Color.naviCyan.opacity(0.06), Color.naviViolet.opacity(0.04), Color.clear],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+                .frame(height: 0.5)
+            }
+        )
     }
 
     // MARK: - Chat Content
@@ -228,30 +246,45 @@ struct MasterChatView: View {
     private var masterEmptyState: some View {
         ZStack(alignment: .bottom) {
             ScrollView {
-                VStack(spacing: 28) {
-                    Spacer(minLength: 80)
+                VStack(spacing: 32) {
+                    Spacer(minLength: 60)
 
-                    // Large animated orb
-                    NaviOrb(size: 72, isActive: true)
-                        .padding(.bottom, 8)
+                    // Large animated orb with enhanced glow
+                    ZStack {
+                        // Soft background glow
+                        Circle()
+                            .fill(
+                                RadialGradient(
+                                    colors: [.naviCyan.opacity(0.08), .naviViolet.opacity(0.04), .clear],
+                                    center: .center,
+                                    startRadius: 20,
+                                    endRadius: 120
+                                )
+                            )
+                            .frame(width: 240, height: 240)
 
-                    VStack(spacing: 8) {
+                        NaviOrb(size: 80, isActive: true)
+                    }
+                    .padding(.bottom, 4)
+
+                    VStack(spacing: 10) {
                         Text("Navi")
-                            .font(.system(size: 34, weight: .black, design: .rounded))
+                            .font(.system(size: 38, weight: .black, design: .rounded))
                             .foregroundStyle(
                                 LinearGradient(
-                                    colors: [.white, .naviCyan.opacity(0.8)],
+                                    colors: [.white, .naviCyan.opacity(0.9), .naviViolet.opacity(0.7)],
                                     startPoint: .leading,
                                     endPoint: .trailing
                                 )
                             )
+                            .shadow(color: .naviCyan.opacity(0.3), radius: 10)
 
                         Text("Din master-agent. Fråga mig vad som helst.")
-                            .font(.system(size: 16))
-                            .foregroundColor(.secondary.opacity(0.6))
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(.secondary.opacity(0.5))
                     }
 
-                    // Quick suggestion chips
+                    // Quick suggestion chips with staggered appearance
                     LazyVGrid(columns: [
                         GridItem(.flexible()),
                         GridItem(.flexible())
@@ -263,7 +296,7 @@ struct MasterChatView: View {
                         suggestionChip("Öppna inställningar", icon: "gearshape.fill", color: .secondary)
                         suggestionChip("Visa media", icon: "photo.stack.fill", color: .pink)
                     }
-                    .padding(.horizontal, 24)
+                    .padding(.horizontal, 20)
 
                     Spacer(minLength: 120)
                 }
@@ -274,7 +307,7 @@ struct MasterChatView: View {
             VStack(spacing: 0) {
                 if showDock {
                     QuickActionDock()
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .transition(.move(edge: .bottom).combined(with: .opacity).combined(with: .scale(scale: 0.95)))
                         .padding(.bottom, 4)
                 }
                 masterInputBar
@@ -292,27 +325,42 @@ struct MasterChatView: View {
             sendMessage()
         } label: {
             HStack(spacing: 8) {
-                Image(systemName: icon)
-                    .font(.system(size: 13))
-                    .foregroundColor(color)
+                ZStack {
+                    Circle()
+                        .fill(color.opacity(0.12))
+                        .frame(width: 28, height: 28)
+                    Image(systemName: icon)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(color)
+                        .shadow(color: color.opacity(0.4), radius: 3)
+                }
                 Text(text)
-                    .font(.system(size: 13))
-                    .foregroundColor(.primary.opacity(0.8))
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.primary.opacity(0.75))
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
                 Spacer()
             }
-            .padding(12)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
             .background(
                 RoundedRectangle(cornerRadius: 14)
                     .fill(Color.glassSurface)
                     .overlay(
                         RoundedRectangle(cornerRadius: 14)
-                            .strokeBorder(color.opacity(0.15), lineWidth: 0.5)
+                            .strokeBorder(
+                                LinearGradient(
+                                    colors: [color.opacity(0.25), Color.glassBorder.opacity(0.15)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 0.6
+                            )
                     )
+                    .shadow(color: color.opacity(0.06), radius: 8, y: 2)
             )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(ScaleButtonStyle())
     }
 
     // MARK: - Master Input Bar
@@ -472,13 +520,38 @@ struct MasterChatView: View {
             HStack {
                 Text("Navi kan göra misstag. Kontrollera viktig information.")
                     .font(.caption2)
-                    .foregroundColor(.secondary.opacity(0.35))
+                    .foregroundColor(.secondary.opacity(0.3))
                 Spacer()
-                SessionCostLabel(fontSize: 10, opacity: 0.3)
+                SessionCostLabel(fontSize: 10, opacity: 0.25)
             }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
+    }
+
+    // MARK: - Panel Toast (visual feedback when opening panels from chat)
+
+    @ViewBuilder
+    private func panelToast(_ panel: FloatingPanelType) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: panel.icon)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(panel.accentColor)
+            Text("Öppnar \(panel.label)…")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(.primary.opacity(0.8))
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(
+            Capsule()
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    Capsule()
+                        .strokeBorder(panel.accentColor.opacity(0.3), lineWidth: 0.6)
+                )
+                .shadow(color: panel.accentColor.opacity(0.15), radius: 12, y: 4)
+        )
     }
 
     // MARK: - Floating Panel Overlay
@@ -700,119 +773,167 @@ struct MasterChatView: View {
     }
 }
 
+// MARK: - Scale Button Style
+
+struct ScaleButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.95 : 1.0)
+            .opacity(configuration.isPressed ? 0.85 : 1.0)
+            .animation(.spring(response: 0.2, dampingFraction: 0.7), value: configuration.isPressed)
+    }
+}
+
 // MARK: - Master Chat Bubble (vivid styling)
 
 struct MasterChatBubble: View {
     let message: PureChatMessage
     @State private var isSpeaking = false
+    @State private var appeared = false
 
     var isUser: Bool { message.role == .user }
 
     var body: some View {
-        if isUser {
-            // User: right-aligned with gradient pill
-            HStack(alignment: .top) {
-                Spacer(minLength: 80)
-                VStack(alignment: .trailing, spacing: 6) {
-                    if let imgs = message.imageData, !imgs.isEmpty {
-                        imageRow(imgs)
-                    }
-                    Text(message.content)
-                        .font(.system(size: 15.5))
-                        .foregroundColor(.white)
-                        .lineSpacing(4)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
-                        .background(
-                            RoundedRectangle(cornerRadius: 18)
-                                .fill(
-                                    LinearGradient(
-                                        colors: [Color.naviViolet.opacity(0.25), Color.naviCyan.opacity(0.15)],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
-                                )
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 18)
-                                        .strokeBorder(Color.naviViolet.opacity(0.2), lineWidth: 0.5)
-                                )
-                        )
-                        .textSelection(.enabled)
-                }
+        Group {
+            if isUser {
+                userBubble
+            } else {
+                assistantBubble
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 6)
-        } else {
-            // Assistant: left-aligned with orb avatar
-            HStack(alignment: .top, spacing: 12) {
-                NaviOrb(size: 26, isActive: false)
-                    .padding(.top, 2)
-
-                VStack(alignment: .leading, spacing: 8) {
-                    MarkdownTextView(text: ResponseCleaner.clean(message.content))
-                        .equatable()
-                        .textSelection(.enabled)
-
-                    // Action row
-                    HStack(spacing: 14) {
-                        Button {
-                            #if os(iOS)
-                            UIPasteboard.general.string = message.content
-                            #else
-                            NSPasteboard.general.setString(message.content, forType: .string)
-                            #endif
-                        } label: {
-                            Image(systemName: "doc.on.doc")
-                                .font(.system(size: 12))
-                        }
-                        .buttonStyle(.plain)
-
-                        Button {
-                            if isSpeaking {
-                                ElevenLabsClient.shared.stop()
-                                isSpeaking = false
-                            } else {
-                                isSpeaking = true
-                                Task {
-                                    await ElevenLabsClient.shared.speak(message.content)
-                                    isSpeaking = false
-                                }
-                            }
-                        } label: {
-                            Image(systemName: isSpeaking ? "stop.circle" : "speaker.wave.2")
-                                .font(.system(size: 12))
-                        }
-                        .buttonStyle(.plain)
-
-                        if let cost = message.costSEK, cost > 0 {
-                            CostBadge(costSEK: cost, usage: message.tokenUsage, model: message.model)
-                        }
-                    }
-                    .foregroundColor(.secondary.opacity(0.5))
-                    .padding(.top, 2)
-                }
-
-                Spacer(minLength: 40)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
         }
+        .opacity(appeared ? 1 : 0)
+        .offset(y: appeared ? 0 : 8)
+        .onAppear {
+            withAnimation(.easeOut(duration: 0.25)) { appeared = true }
+        }
+    }
+
+    // User: right-aligned with vivid gradient pill
+    private var userBubble: some View {
+        HStack(alignment: .top) {
+            Spacer(minLength: 60)
+            VStack(alignment: .trailing, spacing: 6) {
+                if let imgs = message.imageData, !imgs.isEmpty {
+                    imageRow(imgs)
+                }
+                Text(message.content)
+                    .font(.system(size: 15.5))
+                    .foregroundColor(.white)
+                    .lineSpacing(4)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 11)
+                    .background(
+                        RoundedRectangle(cornerRadius: 20)
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        Color.naviViolet.opacity(0.3),
+                                        Color.naviCyan.opacity(0.18)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 20)
+                                    .strokeBorder(
+                                        LinearGradient(
+                                            colors: [Color.naviViolet.opacity(0.3), Color.naviCyan.opacity(0.15)],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        ),
+                                        lineWidth: 0.6
+                                    )
+                            )
+                            .shadow(color: Color.naviViolet.opacity(0.08), radius: 8, y: 2)
+                    )
+                    .textSelection(.enabled)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 6)
+    }
+
+    // Assistant: left-aligned with orb avatar + glass background
+    private var assistantBubble: some View {
+        HStack(alignment: .top, spacing: 12) {
+            NaviOrb(size: 26, isActive: false)
+                .padding(.top, 2)
+
+            VStack(alignment: .leading, spacing: 8) {
+                MarkdownTextView(text: ResponseCleaner.clean(message.content))
+                    .equatable()
+                    .textSelection(.enabled)
+
+                // Action row with hover-ready buttons
+                HStack(spacing: 12) {
+                    bubbleAction(icon: "doc.on.doc") {
+                        #if os(iOS)
+                        UIPasteboard.general.string = message.content
+                        #else
+                        NSPasteboard.general.setString(message.content, forType: .string)
+                        #endif
+                    }
+
+                    bubbleAction(icon: isSpeaking ? "stop.circle.fill" : "speaker.wave.2") {
+                        if isSpeaking {
+                            ElevenLabsClient.shared.stop()
+                            isSpeaking = false
+                        } else {
+                            isSpeaking = true
+                            Task {
+                                await ElevenLabsClient.shared.speak(message.content)
+                                isSpeaking = false
+                            }
+                        }
+                    }
+
+                    if let cost = message.costSEK, cost > 0 {
+                        CostBadge(costSEK: cost, usage: message.tokenUsage, model: message.model)
+                    }
+                }
+                .foregroundColor(.secondary.opacity(0.45))
+                .padding(.top, 2)
+            }
+
+            Spacer(minLength: 40)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+    }
+
+    private func bubbleAction(icon: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 12, weight: .medium))
+                .frame(width: 24, height: 24)
+                .background(
+                    Circle()
+                        .fill(Color.white.opacity(0.04))
+                        .overlay(Circle().strokeBorder(Color.white.opacity(0.08), lineWidth: 0.5))
+                )
+        }
+        .buttonStyle(ScaleButtonStyle())
     }
 
     @ViewBuilder
     private func imageRow(_ imgs: [Data]) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack {
+            HStack(spacing: 8) {
                 ForEach(Array(imgs.enumerated()), id: \.offset) { _, data in
                     #if os(iOS)
                     if let ui = UIImage(data: data) {
-                        Image(uiImage: ui).resizable().scaledToFit()
-                            .frame(maxHeight: 200).cornerRadius(12)
+                        Image(uiImage: ui).resizable().scaledToFill()
+                            .frame(width: 140, height: 140)
+                            .clipShape(RoundedRectangle(cornerRadius: 14))
+                            .shadow(color: .black.opacity(0.3), radius: 6, y: 2)
                     }
                     #else
                     if let ns = NSImage(data: data) {
-                        Image(nsImage: ns).resizable().scaledToFit()
-                            .frame(maxHeight: 200).cornerRadius(12)
+                        Image(nsImage: ns).resizable().scaledToFill()
+                            .frame(width: 140, height: 140)
+                            .clipShape(RoundedRectangle(cornerRadius: 14))
+                            .shadow(color: .black.opacity(0.3), radius: 6, y: 2)
                     }
                     #endif
                 }
