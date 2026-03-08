@@ -200,6 +200,167 @@ extension Color {
         Color(UIColor.separator)
         #endif
     }
+
+    // MARK: - Vivid accent palette for master chat
+    static var naviCyan: Color { Color(red: 0.0, green: 0.87, blue: 0.87) }
+    static var naviMagenta: Color { Color(red: 0.85, green: 0.2, blue: 0.65) }
+    static var naviViolet: Color { Color(red: 0.55, green: 0.3, blue: 1.0) }
+    static var naviMint: Color { Color(red: 0.2, green: 0.9, blue: 0.7) }
+    static var naviAmber: Color { Color(red: 1.0, green: 0.75, blue: 0.2) }
+
+    /// Gradient used for the Navi "orb" / avatar
+    static var naviGradientColors: [Color] {
+        [naviCyan, naviViolet, naviMagenta]
+    }
+
+    /// Deep dark background for chat-centric layout
+    static var masterBackground: Color {
+        #if os(macOS)
+        Color(red: 0.06, green: 0.06, blue: 0.09)
+        #else
+        Color(UIColor { $0.userInterfaceStyle == .dark
+            ? UIColor(red: 0.06, green: 0.06, blue: 0.09, alpha: 1)
+            : UIColor.systemBackground })
+        #endif
+    }
+
+    /// Glass panel surface
+    static var glassSurface: Color {
+        #if os(macOS)
+        Color.white.opacity(0.06)
+        #else
+        Color(UIColor { $0.userInterfaceStyle == .dark
+            ? UIColor(white: 1.0, alpha: 0.06)
+            : UIColor(white: 0.0, alpha: 0.04) })
+        #endif
+    }
+
+    /// Floating panel border
+    static var glassBorder: Color {
+        Color.white.opacity(0.12)
+    }
+}
+
+// MARK: - Animated Mesh Background
+
+struct AnimatedMeshBackground: View {
+    @State private var phase: CGFloat = 0
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { timeline in
+            Canvas { context, size in
+                let t = timeline.date.timeIntervalSinceReferenceDate * 0.3
+                let w = size.width
+                let h = size.height
+
+                // Draw soft gradient orbs that drift
+                let orbs: [(Color, CGFloat, CGFloat, CGFloat)] = [
+                    (.naviViolet.opacity(0.12), 0.3, 0.4, 180),
+                    (.naviCyan.opacity(0.08), 0.7, 0.3, 220),
+                    (.naviMagenta.opacity(0.06), 0.5, 0.7, 260),
+                    (.naviMint.opacity(0.05), 0.2, 0.8, 140),
+                ]
+
+                for (color, baseX, baseY, radius) in orbs {
+                    let x = w * baseX + sin(t * 0.7 + Double(baseX * 10)) * w * 0.08
+                    let y = h * baseY + cos(t * 0.5 + Double(baseY * 10)) * h * 0.06
+                    let r = radius + sin(t * 0.3) * 20
+
+                    let rect = CGRect(x: x - r, y: y - r, width: r * 2, height: r * 2)
+                    let gradient = Gradient(colors: [color, color.opacity(0)])
+                    let shading = GraphicsContext.Shading.radialGradient(
+                        gradient,
+                        center: CGPoint(x: x, y: y),
+                        startRadius: 0,
+                        endRadius: r
+                    )
+                    context.fill(Path(ellipseIn: rect), with: shading)
+                }
+            }
+        }
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
+    }
+}
+
+// MARK: - Navi Orb (animated avatar)
+
+struct NaviOrb: View {
+    var size: CGFloat = 40
+    var isActive: Bool = false
+    @State private var rotation: Double = 0
+
+    var body: some View {
+        ZStack {
+            // Outer glow
+            if isActive {
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [Color.naviCyan.opacity(0.3), Color.clear],
+                            center: .center,
+                            startRadius: size * 0.3,
+                            endRadius: size * 0.9
+                        )
+                    )
+                    .frame(width: size * 1.6, height: size * 1.6)
+            }
+
+            // Gradient orb
+            Circle()
+                .fill(
+                    AngularGradient(
+                        colors: Color.naviGradientColors + [Color.naviGradientColors[0]],
+                        center: .center,
+                        startAngle: .degrees(rotation),
+                        endAngle: .degrees(rotation + 360)
+                    )
+                )
+                .frame(width: size, height: size)
+                .blur(radius: 1)
+
+            // Inner highlight
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [Color.white.opacity(0.3), Color.clear],
+                        center: .init(x: 0.35, y: 0.3),
+                        startRadius: 0,
+                        endRadius: size * 0.4
+                    )
+                )
+                .frame(width: size, height: size)
+
+            // Sparkle icon
+            Image(systemName: "sparkles")
+                .font(.system(size: size * 0.4, weight: .semibold))
+                .foregroundColor(.white)
+        }
+        .onAppear {
+            if isActive {
+                withAnimation(.linear(duration: 8).repeatForever(autoreverses: false)) {
+                    rotation = 360
+                }
+            }
+        }
+        .onChange(of: isActive) { _, active in
+            if active {
+                withAnimation(.linear(duration: 8).repeatForever(autoreverses: false)) {
+                    rotation = 360
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Assistant Avatar (updated)
+
+struct AssistantAvatar: View {
+    var size: CGFloat = 28
+
+    var body: some View {
+        NaviOrb(size: size, isActive: false)
+    }
 }
 
 // MARK: - Int64

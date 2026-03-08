@@ -6,10 +6,12 @@ struct GlassCard<Content: View>: View {
     let content: Content
     var cornerRadius: CGFloat = 16
     var padding: CGFloat = 16
+    var accentColor: Color = .naviCyan
 
-    init(cornerRadius: CGFloat = 16, padding: CGFloat = 16, @ViewBuilder content: () -> Content) {
+    init(cornerRadius: CGFloat = 16, padding: CGFloat = 16, accentColor: Color = .naviCyan, @ViewBuilder content: () -> Content) {
         self.cornerRadius = cornerRadius
         self.padding = padding
+        self.accentColor = accentColor
         self.content = content()
     }
 
@@ -23,13 +25,58 @@ struct GlassCard<Content: View>: View {
                         RoundedRectangle(cornerRadius: cornerRadius)
                             .strokeBorder(
                                 LinearGradient(
-                                    colors: [.white.opacity(0.3), .white.opacity(0.05)],
+                                    colors: [accentColor.opacity(0.3), .white.opacity(0.08), accentColor.opacity(0.1)],
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
                                 ),
-                                lineWidth: 0.5
+                                lineWidth: 0.6
                             )
                     )
+                    .shadow(color: accentColor.opacity(0.08), radius: 16, y: 4)
+            )
+    }
+}
+
+// MARK: - Vivid Glass Card (with glow)
+
+struct VividGlassCard<Content: View>: View {
+    let content: Content
+    var accentColor: Color = .naviCyan
+    var cornerRadius: CGFloat = 20
+
+    init(accentColor: Color = .naviCyan, cornerRadius: CGFloat = 20, @ViewBuilder content: () -> Content) {
+        self.accentColor = accentColor
+        self.cornerRadius = cornerRadius
+        self.content = content()
+    }
+
+    var body: some View {
+        content
+            .padding(16)
+            .background(
+                ZStack {
+                    RoundedRectangle(cornerRadius: cornerRadius)
+                        .fill(.ultraThinMaterial)
+
+                    RoundedRectangle(cornerRadius: cornerRadius)
+                        .fill(accentColor.opacity(0.04))
+
+                    RoundedRectangle(cornerRadius: cornerRadius)
+                        .strokeBorder(
+                            LinearGradient(
+                                colors: [
+                                    accentColor.opacity(0.4),
+                                    Color.white.opacity(0.1),
+                                    accentColor.opacity(0.15)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 0.7
+                        )
+                }
+                .shadow(color: accentColor.opacity(0.12), radius: 20, y: 6)
+                .shadow(color: .black.opacity(0.2), radius: 8, y: 3)
             )
     }
 }

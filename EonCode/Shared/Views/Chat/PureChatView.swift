@@ -312,25 +312,17 @@ struct PureChatView: View {
         VStack(spacing: 28) {
             Spacer()
             VStack(spacing: 14) {
-                // ChatGPT-green sparkle avatar — larger for empty state
-                ZStack {
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [Color(red:0.455,green:0.667,blue:0.612), Color(red:0.3,green:0.55,blue:0.5)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 56, height: 56)
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 24, weight: .semibold))
-                        .foregroundColor(.white)
-                }
+                NaviOrb(size: 56, isActive: true)
                 VStack(spacing: 5) {
                     Text("Hur kan jag hjälpa dig?")
-                        .font(.system(size: 22, weight: .semibold))
-                        .foregroundColor(Color.primary)
+                        .font(.system(size: 22, weight: .bold))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [.white, .naviCyan.opacity(0.8)],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
                 }
             }
             Spacer()
@@ -444,11 +436,17 @@ struct PureChatView: View {
                     Button(action: sendMessage) {
                         ZStack {
                             Circle()
-                                .fill(Color.primary)
+                                .fill(
+                                    LinearGradient(
+                                        colors: [.naviCyan, .naviViolet],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
                                 .frame(width: 30, height: 30)
                             Image(systemName: "arrow.up")
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundColor(Color.chatBackground)
+                                .font(.system(size: 13, weight: .bold))
+                                .foregroundColor(.white)
                         }
                     }
                     .buttonStyle(.plain)
@@ -458,10 +456,17 @@ struct PureChatView: View {
             .padding(.vertical, 6)
             .background(
                 RoundedRectangle(cornerRadius: 22)
-                    .fill(Color.userBubble)
+                    .fill(Color.glassSurface)
                     .overlay(
                         RoundedRectangle(cornerRadius: 22)
-                            .strokeBorder(Color.inputBorder, lineWidth: 0.5)
+                            .strokeBorder(
+                                LinearGradient(
+                                    colors: [Color.naviCyan.opacity(0.2), Color.glassBorder.opacity(0.3), Color.naviViolet.opacity(0.15)],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                ),
+                                lineWidth: 0.6
+                            )
                     )
             )
 
@@ -531,7 +536,7 @@ struct PureChatBubble: View {
 
     var body: some View {
         if isUser {
-            // Right-aligned pill — no avatar
+            // Right-aligned pill with vivid gradient
             HStack(alignment: .top) {
                 Spacer(minLength: 80)
                 VStack(alignment: .trailing, spacing: 6) {
@@ -540,11 +545,24 @@ struct PureChatBubble: View {
                     }
                     Text(message.content)
                         .font(.system(size: 15.5))
-                        .foregroundColor(textPrimary)
+                        .foregroundColor(.white)
                         .lineSpacing(4)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 10)
-                        .background(RoundedRectangle(cornerRadius: 18).fill(userBubbleColor))
+                        .background(
+                            RoundedRectangle(cornerRadius: 18)
+                                .fill(
+                                    LinearGradient(
+                                        colors: [Color.naviViolet.opacity(0.25), Color.naviCyan.opacity(0.15)],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 18)
+                                        .strokeBorder(Color.naviViolet.opacity(0.2), lineWidth: 0.5)
+                                )
+                        )
                         .textSelection(.enabled)
                 }
             }
@@ -782,12 +800,12 @@ struct MarkdownCodeBlock: View {
                         Text(copied ? "Kopierad!" : "Kopiera")
                             .font(.system(size: 12))
                     }
-                    .foregroundColor(copied ? .green : .secondary.opacity(0.5))
+                    .foregroundColor(copied ? .naviMint : .secondary.opacity(0.5))
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
                     .background(
                         Capsule()
-                            .fill(copied ? Color.green.opacity(0.1) : Color.white.opacity(0.04))
+                            .fill(copied ? Color.naviMint.opacity(0.1) : Color.white.opacity(0.04))
                     )
                 }
                 .buttonStyle(.plain)

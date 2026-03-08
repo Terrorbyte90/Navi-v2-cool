@@ -1,24 +1,28 @@
 import SwiftUI
 
+// MARK: - App Section (kept for orchestrator compatibility)
+
 enum AppSection: String, Hashable { case project, pureChat, browser, artifacts, planning, github, agents, media }
+
+// MARK: - App Tab (kept for iOS sidebar compatibility)
+
+enum AppTab: Int, Hashable {
+    case chat, project, browser, artifacts, plan, github, agents, media
+}
+
+// MARK: - ContentView (Master Chat Centric)
+// The entire app revolves around the master chat.
+// Everything else is a floating panel or sidebar history.
 
 struct ContentView: View {
     @StateObject private var projectStore = ProjectStore.shared
     @StateObject private var agentPool = AgentPool.shared
     @StateObject private var settings = SettingsStore.shared
     @StateObject private var statusBroadcaster = DeviceStatusBroadcaster.shared
+    @StateObject private var panelManager = FloatingPanelManager.shared
 
     @State private var showSettings = false
     @State private var showNewProject = false
-    @State private var selectedTab: AppTab = .chat
-    @State private var columnVisibility: NavigationSplitViewVisibility = .all
-    @State private var macSection: AppSection = .project
-
-    var activeProject: NaviProject? { projectStore.activeProject }
-    var activeAgent: ProjectAgent? {
-        guard let project = activeProject else { return nil }
-        return agentPool.agent(for: project)
-    }
 
     var body: some View {
         #if os(macOS)
@@ -28,19 +32,21 @@ struct ContentView: View {
         #endif
     }
 
-    // MARK: - macOS Layout
+    // MARK: - macOS Layout (sidebar + master chat)
 
     #if os(macOS)
+    @State private var columnVisibility: NavigationSplitViewVisibility = .all
+
     var macLayout: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
             SidebarView(
                 selectedProject: $projectStore.activeProject,
                 showNewProject: $showNewProject,
-                section: $macSection
+                section: .constant(.pureChat)
             )
             .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 320)
         } detail: {
-            macDetailView
+            MasterChatView()
         }
         .navigationTitle("")
         .toolbar(.hidden, for: .windowToolbar)
@@ -49,74 +55,50 @@ struct ContentView: View {
         }
         .onAppear {
             BackgroundDaemon.shared.start()
-            NaviOrchestrator.shared.setActiveView(macSection)
-            NaviOrchestrator.shared.setActiveProject(activeProject)
+            NaviOrchestrator.shared.setActiveView(.pureChat)
+            NaviOrchestrator.shared.setActiveProject(projectStore.activeProject)
         }
-        .onChange(of: macSection) { _, newSection in
-            NaviOrchestrator.shared.setActiveView(newSection)
-        }
-        .onChange(of: activeProject) { _, newProject in
+        .onChange(of: projectStore.activeProject) { _, newProject in
             NaviOrchestrator.shared.setActiveProject(newProject)
-        }
-    }
-
-    @ViewBuilder
-    var macDetailView: some View {
-        switch macSection {
-        case .pureChat:
-            PureChatView()
-        case .browser:
-            BrowserView()
-        case .artifacts:
-            ArtifactView()
-        case .planning:
-            PlanView()
-        case .github:
-            GitHubView()
-        case .agents:
-            AgentView()
-        case .media:
-            MediaView()
-        case .project:
-            if let project = activeProject, let agent = activeAgent {
-                MacMainView(project: project, agent: agent)
-            } else {
-                WelcomeView(showNewProject: $showNewProject)
-            }
         }
     }
     #endif
 
-    // MARK: - iOS Layout
+    // MARK: - iOS Layout (sidebar drawer + master chat)
 
     #if os(iOS)
     @State private var showSidebar = false
-    // Reactive chat manager so model name updates live
+    @State private var selectedTab: AppTab = .chat
     @StateObject private var chatMgr = ChatManager.shared
-    @StateObject private var planMgr = PlanManager.shared
-    @StateObject private var browserAgent = BrowserAgent.shared
 
     var iOSLayout: some View {
         ZStack(alignment: .leading) {
-            // ── Main content ────────────────────────────────────────────────
+            // Main: Master Chat
             VStack(spacing: 0) {
                 iOSTopBar
-                Divider().opacity(0.12)
-                iOSMainContent
+                Divider().overlay(
+                    LinearGradient(
+                        colors: [Color.naviCyan.opacity(0.3), Color.naviViolet.opacity(0.2), Color.clear],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                ).frame(height: 0.5)
+
+                MasterChatView()
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color.chatBackground)
+            .background(Color.masterBackground)
 
-            // ── Dim overlay ─────────────────────────────────────────────────
+            // Dim overlay
             if showSidebar {
-                Color.black.opacity(0.45)
+                Color.black.opacity(0.5)
                     .ignoresSafeArea()
                     .onTapGesture { closeSidebar() }
                     .transition(.opacity)
                     .zIndex(10)
             }
 
-            // ── Sidebar panel ───────────────────────────────────────────────
+            // Sidebar panel
             ChatHistorySidebar(
                 showSidebar: $showSidebar,
                 showNewProject: $showNewProject,
@@ -130,350 +112,58 @@ struct ContentView: View {
         .sheet(isPresented: $showNewProject) { NewProjectView() }
         .onAppear {
             PeerSyncEngine.shared.startBrowsing()
-            updateViewContext()
-            NaviOrchestrator.shared.setActiveView(appSectionForTab(selectedTab))
-            NaviOrchestrator.shared.setActiveProject(activeProject)
+            NaviOrchestrator.shared.setActiveView(.pureChat)
+            NaviOrchestrator.shared.setActiveProject(projectStore.activeProject)
         }
-        .onChange(of: selectedTab) { updateViewContext() }
-        .onChange(of: selectedTab) { _, newTab in
-            NaviOrchestrator.shared.setActiveView(appSectionForTab(newTab))
-        }
-        .onChange(of: activeProject) { _, newProject in
+        .onChange(of: projectStore.activeProject) { _, newProject in
             NaviOrchestrator.shared.setActiveProject(newProject)
         }
         .onReceive(NotificationCenter.default.publisher(for: .didOpenGitHubProject)) { _ in
-            // Auto-switch to project tab when a GitHub repo is opened as project
             withAnimation(.easeInOut(duration: 0.25)) {
-                selectedTab = .project
                 showSidebar = false
             }
         }
     }
 
-    private func updateViewContext() {
-        let viewName: String
-        let viewPurpose: String
-        switch selectedTab {
-        case .chat:
-            viewName = "Chatt"
-            viewPurpose = "Fri konversation utan projektkoppling."
-        case .project:
-            let name = activeProject?.name ?? "inget valt"
-            viewName = "Projekt (\(name))"
-            viewPurpose = "Kodning och filhantering i projektet."
-        case .browser:
-            viewName = "Webb"
-            viewPurpose = "Webbsurfning och research."
-        case .artifacts:
-            viewName = "Artefakter"
-            viewPurpose = "Hantera genererade filer och resurser."
-        case .plan:
-            viewName = "Planera"
-            viewPurpose = "Skapa och hantera projektplaner."
-        case .github:
-            viewName = "GitHub"
-            viewPurpose = "Hantera repos, PRs och issues."
-        case .agents:
-            viewName = "Agenter"
-            viewPurpose = "Autonoma agenter som arbetar mot långsiktiga mål."
-        case .media:
-            viewName = "Media"
-            viewPurpose = "Generera bilder och video via xAI."
-        }
-        MessageBuilder.currentViewContext = "\(viewName) — \(viewPurpose)"
-    }
-
-    // MARK: - Top bar
-
+    // iOS Top Bar - minimal, focused
     var iOSTopBar: some View {
         HStack(spacing: 0) {
-            // Hamburger — sidebar toggle
             Button { openSidebar() } label: {
                 Image(systemName: "sidebar.left")
                     .font(.system(size: 18, weight: .regular))
-                    .foregroundColor(Color.secondary)
+                    .foregroundColor(.secondary.opacity(0.7))
                     .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
             }
 
             Spacer()
 
-            // Center: "Navi  ModelName ⌄" — ChatGPT faithful
-            iOSCenterTitle
+            // Center: Navi title with model
+            HStack(spacing: 5) {
+                NaviOrb(size: 18, isActive: chatMgr.isStreaming)
+                Text("Navi")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundColor(.white)
+                Text(chatMgr.activeConversation?.model.displayName ?? "")
+                    .font(.system(size: 14))
+                    .foregroundColor(.naviCyan.opacity(0.7))
+            }
 
             Spacer()
 
-            // Trailing action
-            iOSTrailingButton
-                .frame(width: 44, height: 44)
-                .contentShape(Rectangle())
-        }
-        .padding(.horizontal, 4)
-        .frame(height: 52)
-        .background(Color.chatBackground)
-    }
-
-    // MARK: - Center title (reactive, ChatGPT-style)
-
-    @ViewBuilder
-    var iOSCenterTitle: some View {
-        switch selectedTab {
-        case .chat:
-            // "Navi  Haiku 4.5 ⌄" — exact ChatGPT layout
-            Menu {
-                ForEach(ClaudeModel.allCases) { model in
-                    Button {
-                        if let conv = chatMgr.activeConversation,
-                           let idx = chatMgr.conversations.firstIndex(where: { $0.id == conv.id }) {
-                            chatMgr.conversations[idx].model = model
-                            // Replace the whole value — mutating an optional copy has no effect
-                            chatMgr.activeConversation = chatMgr.conversations[idx]
-                        }
-                    } label: {
-                        HStack {
-                            Text(model.displayName)
-                            if model == chatMgr.activeConversation?.model {
-                                Image(systemName: "checkmark")
-                            }
-                        }
-                    }
-                }
-            } label: {
-                HStack(spacing: 5) {
-                    Text("Navi")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(Color.primary)
-                    Text(chatMgr.activeConversation?.model.displayName ?? "Claude")
-                        .font(.system(size: 15))
-                        .foregroundColor(Color.secondary)
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(Color.secondary.opacity(0.6))
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-
-        case .project:
-            HStack(spacing: 5) {
-                Text("Navi")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(Color.primary)
-                Text(activeProject?.name ?? "Projekt")
-                    .font(.system(size: 15))
-                    .foregroundColor(Color.secondary)
-                    .lineLimit(1)
-            }
-
-        case .browser:
-            HStack(spacing: 5) {
-                Text("Navi")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(Color.primary)
-                Text("Webb")
-                    .font(.system(size: 15))
-                    .foregroundColor(Color.secondary)
-            }
-
-        case .artifacts:
-            HStack(spacing: 5) {
-                Text("Navi")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(Color.primary)
-                Text("Artefakter")
-                    .font(.system(size: 15))
-                    .foregroundColor(Color.secondary)
-            }
-
-        case .plan:
-            Menu {
-                Button("Ny plan") { _ = planMgr.newPlan() }
-            } label: {
-                HStack(spacing: 5) {
-                    Text("Navi")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(Color.primary)
-                    Text(planMgr.activePlan?.title ?? "Planera")
-                        .font(.system(size: 15))
-                        .foregroundColor(Color.secondary)
-                        .lineLimit(1)
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(Color.secondary.opacity(0.6))
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-
-        case .github:
-            HStack(spacing: 5) {
-                Text("Navi")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(Color.primary)
-                Text("GitHub")
-                    .font(.system(size: 15))
-                    .foregroundColor(Color.secondary)
-            }
-
-        case .agents:
-            HStack(spacing: 5) {
-                Text("Navi")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(Color.primary)
-                Text("Agenter")
-                    .font(.system(size: 15))
-                    .foregroundColor(Color.secondary)
-            }
-
-        case .media:
-            HStack(spacing: 5) {
-                Text("Navi")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(Color.primary)
-                Text("Media")
-                    .font(.system(size: 15))
-                    .foregroundColor(Color.secondary)
-            }
-        }
-    }
-
-    // MARK: - Trailing button
-
-    @ViewBuilder
-    var iOSTrailingButton: some View {
-        switch selectedTab {
-        case .chat:
+            // New chat
             Button { _ = chatMgr.newConversation() } label: {
                 Image(systemName: "square.and.pencil")
                     .font(.system(size: 17))
-                    .foregroundColor(Color.secondary)
-            }
-
-        case .project:
-            HStack(spacing: 4) {
-                Circle()
-                    .fill(statusBroadcaster.remoteMacIsOnline ? Color.green : Color.secondary.opacity(0.6))
-                    .frame(width: 6, height: 6)
-                Text(statusBroadcaster.remoteMacIsOnline ? "Mac" : "Offline")
-                    .font(.system(size: 11))
-                    .foregroundColor(Color.secondary.opacity(0.6))
-            }
-
-        case .browser:
-            Circle()
-                .fill({ if case .working = browserAgent.status { return Color.green } else { return Color.secondary.opacity(0.6).opacity(0.4) } }())
-                .frame(width: 7, height: 7)
-
-        case .plan:
-            Button { _ = planMgr.newPlan() } label: {
-                Image(systemName: "square.and.pencil")
-                    .font(.system(size: 17))
-                    .foregroundColor(Color.secondary)
-            }
-
-        default:
-            Color.clear.frame(width: 1, height: 1)
-        }
-    }
-
-    // MARK: - Main content
-
-    @ViewBuilder
-    var iOSMainContent: some View {
-        switch selectedTab {
-        case .chat:
-            PureChatView()
-        case .project:
-            if let project = activeProject, let agent = activeAgent {
-                ChatView(agent: agent)
-            } else {
-                iOSWelcome
-            }
-        case .browser:
-            BrowserView()
-        case .artifacts:
-            ArtifactView()
-        case .plan:
-            PlanView()
-        case .github:
-            GitHubView()
-        case .agents:
-            AgentView()
-        case .media:
-            MediaView()
-        }
-    }
-
-    // MARK: - Welcome
-
-    var iOSWelcome: some View {
-        VStack(spacing: 32) {
-            Spacer()
-            ZStack {
-                Circle()
-                    .fill(
-                        RadialGradient(
-                            colors: [Color.accentNavi.opacity(0.12), Color.accentNavi.opacity(0.02)],
-                            center: .center,
-                            startRadius: 0,
-                            endRadius: 48
-                        )
-                    )
-                    .frame(width: 80, height: 80)
-                Image(systemName: "sparkles")
-                    .font(.system(size: 36, weight: .medium))
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [.accentNavi, .accentNavi.opacity(0.65)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-            }
-            VStack(spacing: 8) {
-                Text("Navi")
-                    .font(.system(size: 32, weight: .bold, design: .rounded))
-                Text("Välj ett projekt i sidomenyn")
-                    .font(.system(size: 15))
                     .foregroundColor(.secondary.opacity(0.7))
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
-            Button { openSidebar() } label: {
-                Label("Öppna sidomenyn", systemImage: "sidebar.left")
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundColor(.accentNavi)
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 13)
-                    .background(
-                        RoundedRectangle(cornerRadius: 14)
-                            .fill(Color.accentNavi.opacity(0.1))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 14)
-                                    .strokeBorder(Color.accentNavi.opacity(0.2), lineWidth: 0.5)
-                            )
-                    )
-            }
-            Spacer()
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.chatBackground)
+        .padding(.horizontal, 4)
+        .frame(height: 52)
+        .background(Color.masterBackground.opacity(0.9))
     }
-
-    // MARK: - Tab to section mapping
-
-    private func appSectionForTab(_ tab: AppTab) -> AppSection {
-        switch tab {
-        case .chat: return .pureChat
-        case .project: return .project
-        case .browser: return .browser
-        case .artifacts: return .artifacts
-        case .plan: return .planning
-        case .github: return .github
-        case .agents: return .agents
-        case .media: return .media
-        }
-    }
-
-    // MARK: - Sidebar helpers
 
     private func openSidebar() {
         withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
@@ -489,125 +179,11 @@ struct ContentView: View {
     #endif
 }
 
-// MARK: - Tabs
-
-enum AppTab: Int, Hashable {
-    case chat, project, browser, artifacts, plan, github, agents, media
-}
-
-// MARK: - macOS Main View
+// MARK: - macOS Editor Tab (kept for compatibility)
 
 enum MacEditorTab: Int, Hashable { case editor, agents }
 
 #if os(macOS)
-struct MacMainView: View {
-    let project: NaviProject
-    @ObservedObject var agent: ProjectAgent
-
-    @State private var macEditorTab: MacEditorTab = .editor
-    @State private var selectedNode: FileNode?
-    @State private var fileContent = ""
-
-    var body: some View {
-        VStack(spacing: 0) {
-            // ── Top bar ─────────────────────────────────────────────────────
-            macProjectTopBar
-
-            Divider().opacity(0.12)
-
-            // ── Content ──────────────────────────────────────────────────────
-            HSplitView {
-                // Left: file tree + editor / agent status
-                VStack(spacing: 0) {
-                    if macEditorTab == .editor {
-                        HSplitView {
-                            FileTreeView(project: project, selectedNode: $selectedNode)
-                                .frame(minWidth: 160, maxWidth: 260)
-                            editorPane
-                        }
-                    } else {
-                        AgentStatusView(agent: agent)
-                    }
-                }
-                .frame(minWidth: 380)
-
-                // Right: chat
-                ChatView(agent: agent)
-                    .frame(minWidth: 300, maxWidth: 480)
-            }
-        }
-        .background(Color.chatBackground)
-    }
-
-    var macProjectTopBar: some View {
-        HStack(spacing: 12) {
-            // Project color dot + name
-            HStack(spacing: 7) {
-                Circle()
-                    .fill(project.color.color)
-                    .frame(width: 9, height: 9)
-                Text(project.name)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.primary)
-            }
-
-            Spacer()
-
-            // Editor / Agent tabs
-            HStack(spacing: 2) {
-                MacTabPill(title: "Filer", icon: "folder", tab: .editor, selected: $macEditorTab)
-                MacTabPill(title: "Agent", icon: "gearshape.2", tab: .agents, selected: $macEditorTab)
-            }
-            .padding(3)
-            .background(Color.white.opacity(0.06))
-            .cornerRadius(9)
-
-            // Running indicator
-            if agent.isRunning {
-                HStack(spacing: 5) {
-                    ProgressView().scaleEffect(0.6)
-                    Text(agent.currentStatus.prefix(30))
-                        .font(.system(size: 11))
-                        .foregroundColor(.secondary)
-                        .lineLimit(1)
-                }
-                .frame(maxWidth: 200)
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-    }
-
-    @ViewBuilder
-    var editorPane: some View {
-        if let node = selectedNode, !node.isDirectory {
-            CodeEditorView(
-                content: $fileContent,
-                fileType: node.fileType,
-                onSave: { newContent in
-                    try? newContent.write(toFile: node.path, atomically: true, encoding: .utf8)
-                }
-            )
-            .onAppear { fileContent = (try? String(contentsOfFile: node.path)) ?? "" }
-            .onChange(of: selectedNode?.id) {
-                if let n = selectedNode, !n.isDirectory {
-                    fileContent = (try? String(contentsOfFile: n.path)) ?? ""
-                }
-            }
-        } else {
-            VStack(spacing: 10) {
-                Image(systemName: "doc.text")
-                    .font(.system(size: 40))
-                    .foregroundColor(.secondary.opacity(0.2))
-                Text("Välj en fil att redigera")
-                    .font(.system(size: 13))
-                    .foregroundColor(.secondary.opacity(0.4))
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-    }
-}
-
 struct MacTabPill: View {
     let title: String
     let icon: String
@@ -636,7 +212,6 @@ struct MacTabPill: View {
     }
 }
 
-// Keep old TabButton for any remaining usages
 struct TabButton: View {
     let title: String
     let icon: String
@@ -651,7 +226,7 @@ struct TabButton: View {
 }
 #endif
 
-// MARK: - iOS file tree + editor
+// MARK: - iOS file tree + editor (kept for compatibility)
 
 #if os(iOS)
 struct FileTreeAndEditorView: View {
@@ -690,7 +265,6 @@ struct FileTreeAndEditorView: View {
     }
 }
 
-// Adaptive layout: split on iPad, stack on iPhone
 struct HSplitOrStack<Content: View>: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     @ViewBuilder let content: () -> Content
@@ -716,32 +290,20 @@ struct WelcomeView: View {
             Spacer()
 
             VStack(spacing: 12) {
-                ZStack {
-                    Circle()
-                        .fill(
-                            RadialGradient(
-                                colors: [Color.accentNavi.opacity(0.12), Color.accentNavi.opacity(0.02)],
-                                center: .center,
-                                startRadius: 0,
-                                endRadius: 48
-                            )
-                        )
-                        .frame(width: 80, height: 80)
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 36, weight: .medium))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [.accentNavi, .accentNavi.opacity(0.65)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                }
+                NaviOrb(size: 64, isActive: true)
+
                 Text("Navi")
-                    .font(.system(size: 36, weight: .bold, design: .rounded))
-                Text("AI-driven kodningsagent")
+                    .font(.system(size: 36, weight: .black, design: .rounded))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [.white, .naviCyan.opacity(0.8)],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                Text("AI-driven master-agent")
                     .font(.system(size: 16))
-                    .foregroundColor(.secondary.opacity(0.7))
+                    .foregroundColor(.secondary.opacity(0.6))
             }
 
             if store.projects.isEmpty {
@@ -749,9 +311,9 @@ struct WelcomeView: View {
                     GlassButton("Skapa nytt projekt", icon: "plus", isPrimary: true) {
                         showNewProject = true
                     }
-                    Text("Eller öppna ett befintligt projekt från sidopanelen")
+                    Text("Eller börja chatta direkt med Navi")
                         .font(.system(size: 13))
-                        .foregroundColor(.secondary.opacity(0.6))
+                        .foregroundColor(.secondary.opacity(0.5))
                 }
             } else {
                 VStack(alignment: .leading, spacing: 8) {
@@ -770,6 +332,7 @@ struct WelcomeView: View {
                                     .frame(width: 10, height: 10)
                                 Text(project.name)
                                     .font(.system(size: 14))
+                                    .foregroundColor(.white)
                                 Spacer()
                                 Text(project.modifiedAt.relativeString)
                                     .font(.system(size: 11))
@@ -777,7 +340,7 @@ struct WelcomeView: View {
                             }
                             .padding(.horizontal, 12)
                             .padding(.vertical, 8)
-                            .background(RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(0.06)))
+                            .background(RoundedRectangle(cornerRadius: 10).fill(Color.glassSurface))
                         }
                         .buttonStyle(.plain)
                     }
@@ -794,7 +357,7 @@ struct WelcomeView: View {
         }
         .padding()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.chatBackground)
+        .background(Color.masterBackground)
     }
 }
 
@@ -855,7 +418,7 @@ struct NewProjectView: View {
             }
             #endif
         }
-        .background(Color.chatBackground)
+        .background(Color.masterBackground)
     }
 
     private func createProject() async {
@@ -892,16 +455,8 @@ struct NewProjectView: View {
 
 // MARK: - Previews
 
-#Preview("WelcomeView – inga projekt") {
+#Preview("WelcomeView") {
     WelcomeView(showNewProject: .constant(false))
-}
-
-#Preview("WelcomeView – med projekt") {
-    let store = ProjectStore.shared
-    let p1 = NaviProject(name: "Navi v2", rootPath: "/tmp/eon", color: .blue)
-    let p2 = NaviProject(name: "Lunaflix iOS", rootPath: "/tmp/luna", color: .purple)
-    store.projects = [p1, p2]
-    return WelcomeView(showNewProject: .constant(false))
 }
 
 #Preview("NewProjectView") {
