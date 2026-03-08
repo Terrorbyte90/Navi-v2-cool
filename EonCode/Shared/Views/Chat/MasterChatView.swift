@@ -260,6 +260,8 @@ struct MasterChatView: View {
                         suggestionChip("Planera en app-idé", icon: "lightbulb.fill", color: .naviAmber)
                         suggestionChip("Hjälp mig med kod", icon: "chevron.left.forwardslash.chevron.right", color: .naviViolet)
                         suggestionChip("Generera en bild", icon: "photo.fill", color: .naviMagenta)
+                        suggestionChip("Öppna inställningar", icon: "gearshape.fill", color: .secondary)
+                        suggestionChip("Visa media", icon: "photo.stack.fill", color: .pink)
                     }
                     .padding(.horizontal, 24)
 
@@ -576,6 +578,29 @@ struct MasterChatView: View {
 
     private func sendMessage() {
         guard !inputText.isBlank || !selectedImages.isEmpty else { return }
+
+        // Check for panel-opening intents before sending to AI
+        let lower = inputText.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+        if let panel = detectPanelIntent(lower) {
+            panelManager.show(panel)
+            inputText = ""
+            return
+        }
+
+        // Check for image generation intent
+        if detectImageGenerationIntent(lower) {
+            let imagePrompt = extractImagePrompt(from: inputText)
+            panelManager.show(.media)
+            if !imagePrompt.isEmpty {
+                // Trigger generation via MediaGenerationManager
+                Task {
+                    await MediaGenerationManager.shared.generateImage(prompt: imagePrompt)
+                }
+            }
+            inputText = ""
+            return
+        }
+
         if manager.activeConversation == nil {
             _ = manager.newConversation()
         }
@@ -599,6 +624,66 @@ struct MasterChatView: View {
                 }
             }
         }
+    }
+
+    // MARK: - Intent Detection
+
+    /// Detects if the user wants to open a specific panel
+    private func detectPanelIntent(_ text: String) -> FloatingPanelType? {
+        let panelKeywords: [(FloatingPanelType, [String])] = [
+            (.settings, ["öppna inställningar", "visa inställningar", "settings", "inställningar", "api-nycklar", "api nycklar"]),
+            (.media, ["öppna media", "visa media", "media panel"]),
+            (.browser, ["öppna webbläsare", "visa webb", "öppna webb", "browse"]),
+            (.github, ["öppna github", "visa github"]),
+            (.plan, ["öppna plan", "visa plan", "planer"]),
+            (.agents, ["öppna agenter", "visa agenter", "mina agenter"]),
+            (.artifacts, ["öppna artefakter", "visa artefakter"]),
+            (.code, ["öppna kod", "visa kod", "kodredigera", "visa filer"]),
+            (.project, ["öppna projekt", "visa projekt", "projektvy"]),
+            (.todo, ["öppna att göra", "visa uppgifter", "todo", "att göra"]),
+        ]
+
+        for (panel, keywords) in panelKeywords {
+            for keyword in keywords {
+                if text == keyword || text.hasPrefix(keyword) {
+                    return panel
+                }
+            }
+        }
+        return nil
+    }
+
+    /// Detects if the user wants to generate an image
+    private func detectImageGenerationIntent(_ text: String) -> Bool {
+        let imageKeywords = ["generera en bild", "skapa en bild", "generera bild", "skapa bild",
+                             "generate image", "generate an image", "create image", "rita en bild"]
+        return imageKeywords.contains(where: { text.hasPrefix($0) })
+    }
+
+    /// Extracts the image prompt from user text (after the intent keyword)
+    private func extractImagePrompt(from text: String) -> String {
+        let prefixes = ["generera en bild av ", "generera en bild: ", "generera en bild på ",
+                        "skapa en bild av ", "skapa en bild: ", "skapa en bild på ",
+                        "generera bild av ", "generera bild: ", "generera bild på ",
+                        "skapa bild av ", "skapa bild: ", "skapa bild på ",
+                        "generate image of ", "generate image: ", "generate an image of ",
+                        "create image of ", "create image: ", "rita en bild av ", "rita en bild på "]
+        let lower = text.lowercased()
+        for prefix in prefixes {
+            if lower.hasPrefix(prefix) {
+                return String(text.dropFirst(prefix.count)).trimmingCharacters(in: .whitespaces)
+            }
+        }
+        // Fallback: remove the command part
+        let commandPrefixes = ["generera en bild", "skapa en bild", "generera bild", "skapa bild",
+                               "generate image", "generate an image", "create image", "rita en bild"]
+        for prefix in commandPrefixes {
+            if lower.hasPrefix(prefix) {
+                let rest = String(text.dropFirst(prefix.count)).trimmingCharacters(in: .whitespaces)
+                return rest
+            }
+        }
+        return ""
     }
 
     private func updateModel(_ model: ClaudeModel, for conv: ChatConversation) {

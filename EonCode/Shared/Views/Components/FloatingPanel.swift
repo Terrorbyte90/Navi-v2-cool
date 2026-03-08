@@ -231,7 +231,7 @@ struct QuickActionDock: View {
     @StateObject private var agentRunner = AutonomousAgentRunner.shared
 
     private let dockItems: [FloatingPanelType] = [
-        .project, .code, .todo, .plan, .browser, .github, .agents, .media
+        .project, .code, .todo, .plan, .browser, .github, .agents, .media, .settings
     ]
 
     var body: some View {

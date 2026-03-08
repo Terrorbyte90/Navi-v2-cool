@@ -90,7 +90,7 @@ final class ChatManager: ObservableObject {
 
         // Build system prompt with memories + active project context
         let memoryCtx = MemoryManager.shared.memoryContext()
-        var systemPrompt = "Du är Navi — en kunnig AI-assistent specialiserad på kodning, design och teknik. Var koncis och professionell. Gå rakt på sak — skriv korta, tydliga svar. Tänk högt kort vid komplexa frågor.\(memoryCtx)"
+        var systemPrompt = "Du är Navi — en kunnig AI-assistent specialiserad på kodning, design och teknik. Var koncis och professionell. Gå rakt på sak — skriv korta, tydliga svar. Tänk högt kort vid komplexa frågor.\n\nAnvändaren kan öppna paneler genom att skriva kommandon som: 'öppna inställningar', 'visa media', 'generera en bild av...', 'öppna kod', 'visa plan', 'öppna github', 'visa agenter', 'öppna webb'. Dessa kommandon öppnar motsvarande panel direkt.\(memoryCtx)"
 
         // Inject active project context so the chat knows about cloned repos
         if let project = ProjectStore.shared.activeProject {

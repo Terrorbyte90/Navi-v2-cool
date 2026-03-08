@@ -116,7 +116,7 @@ struct MediaView: View {
                             Text("\(n) bild\(n > 1 ? "er" : "")").tag(n)
                         }
                     }
-                    Toggle("Pro-modell ($0.07)", isOn: $useProModel)
+                    Toggle("Klassisk (grok-2-image)", isOn: $useProModel)
                 } label: {
                     ZStack {
                         Circle()
@@ -169,7 +169,7 @@ struct MediaView: View {
             HStack {
                 let cost = estimateCostSEK()
                 if cost > 0 {
-                    Text("~\(String(format: "%.2f kr", cost)) · \(useProModel ? "Pro" : "Standard") · \(imageSize)")
+                    Text("~\(String(format: "%.2f kr", cost)) · \(useProModel ? "grok-2-image" : "grok-imagine") · \(imageSize)")
                         .font(.caption2)
                         .foregroundColor(.secondary.opacity(0.6))
                 }
@@ -402,7 +402,7 @@ struct MediaView: View {
                 Stepper("", value: $imageVariations, in: 1...4).labelsHidden()
             }
 
-            Toggle("Pro-modell (grok-imagine-image-pro)", isOn: $useProModel)
+            Toggle("Klassisk modell (grok-2-image)", isOn: $useProModel)
                 .font(.system(size: 13))
         }
         .padding(12)
@@ -648,7 +648,7 @@ struct MediaView: View {
         errorMessage = nil
         isGenerating = true
 
-        let model = useProModel ? "grok-imagine-image-pro" : "grok-imagine-image"
+        let model = useProModel ? "grok-2-image" : "grok-imagine-image"
 
         Task {
             switch selectedMode {
